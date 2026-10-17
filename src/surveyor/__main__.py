@@ -3,6 +3,7 @@ import argparse
 import json
 from pathlib import Path
 from .core import JobStore, Mission, SUITES, Surveyor
+from .orchestrator import ResearchRequest, run_research
 
 
 def main():
@@ -19,6 +20,10 @@ def main():
     for action in ("run", "cancel", "resume"):
         cmd = sub.add_parser(action)
         cmd.add_argument("job_id", type=int)
+    multi = sub.add_parser("research", help="Explicit sequential dispatch across selected suites")
+    multi.add_argument("question")
+    multi.add_argument("--suites", nargs="+", required=True, choices=SUITES)
+    multi.add_argument("--scope", default="")
     args = parser.parse_args()
     with_store = JobStore(Path(args.db))
     try:
@@ -28,6 +33,9 @@ def main():
             print(with_store.submit(Mission(args.suite, args.question, args.scope)))
         elif args.command == "get":
             print(json.dumps(with_store.get(args.job_id), indent=2))
+        elif args.command == "research":
+            report = run_research(with_store, ResearchRequest(args.question, tuple(args.suites), args.scope))
+            print(json.dumps(report, indent=2))
         elif args.command == "run":
             print(json.dumps(Surveyor(with_store).dispatch(args.job_id), indent=2))
         elif args.command == "cancel":
