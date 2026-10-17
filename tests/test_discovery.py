@@ -56,6 +56,17 @@ class DiscoveryTests(unittest.TestCase):
             saved=save_report(report,folder)
             self.assertEqual(json.loads(saved.read_text())["schema"],"surveyor.discovery.v0")
 
+    def test_powershell_utf8_bom_manifest(self):
+        with TemporaryDirectory() as folder:
+            file = Path(folder) / "powershell_manifest.json"
+            file.write_text(
+                '[{"provider":"youtube","url":"https://example.org/video","title":"Morna","kind":"video"}]',
+                encoding="utf-8-sig"
+            )
+            rows = manifest_connector(file, "youtube")("Morna", 20)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0].title, "Morna")
+
     def test_rejects_manifest_unknown_fields(self):
         with TemporaryDirectory() as folder:
             file=Path(folder)/"sources.json"
