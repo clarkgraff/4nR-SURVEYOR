@@ -8,6 +8,7 @@ from .pipeline import PipelineRequest, run_pipeline
 from .discovery import DiscoveryRequest, discover, save_report, SOURCES
 from .discovery_connectors import manifest_connector
 from .youtube_connector import youtube_connector
+from .presentation import present, save_presentation, record_decision, ACTIONS
 
 
 def main():
@@ -47,6 +48,16 @@ def main():
     discovery.add_argument("--archive", default="surveyor-archive")
     discovery.add_argument("--scope", default="")
     discovery.add_argument("--limit", type=int, default=20)
+    presentation = sub.add_parser("present")
+    presentation.add_argument("discovery_file")
+    presentation.add_argument("--archive", default="surveyor-archive")
+    decision = sub.add_parser("decide")
+    decision.add_argument("presentation_file")
+    decision.add_argument("item", type=int)
+    decision.add_argument("action", choices=sorted(ACTIONS))
+    decision.add_argument("--operator", required=True)
+    decision.add_argument("--reason", required=True)
+    decision.add_argument("--archive", default="surveyor-archive")
     args = parser.parse_args()
     with_store = JobStore(Path(args.db))
     try:
@@ -86,6 +97,15 @@ def main():
             destination = save_report(report, args.archive)
             report["archive_path"] = str(destination)
             print(json.dumps(report, indent=2, ensure_ascii=False))
+        elif args.command == "present":
+            report = present(args.discovery_file)
+            destination = save_presentation(report, args.archive)
+            report["presentation_path"] = str(destination)
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+        elif args.command == "decide":
+            result = record_decision(args.presentation_file, args.item, args.action,
+                                     args.operator, args.reason, archive=args.archive)
+            print(json.dumps(result, indent=2, ensure_ascii=False))
         elif args.command == "run":
             print(json.dumps(Surveyor(with_store).dispatch(args.job_id), indent=2))
         elif args.command == "cancel":
