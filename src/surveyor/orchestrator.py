@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Callable
 from .core import JobStore, Mission, lemonade_chat, utcnow
 from .specialists import SPECIALISTS, system_prompt
+from .evidence import from_inference
 
 @dataclass(frozen=True)
 class ResearchRequest:
@@ -46,7 +47,8 @@ def run_research(store: JobStore, request: ResearchRequest,
             result = infer(suite, request.question, system_prompt(suite, request.approved_scope))
             if not isinstance(result, dict):
                 raise TypeError("Inference adapter must return a dictionary")
-            result = {**result, "suite": suite, "evidence_status": "unverified"}
+            evidence = from_inference(suite, request.question, result).export()
+            result = {**result, "suite": suite, "evidence_status": "unverified", "evidence_package": evidence}
             store.transition(job_id, "running", "completed", result=result)
             results.append({"job_id": job_id, "status": "completed", "result": result})
         except Exception as exc:
