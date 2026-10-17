@@ -119,6 +119,9 @@ def main():
         elif args.command == "decide":
             result = record_decision(args.presentation_file, args.item, args.action,
                                      args.operator, args.reason, archive=args.archive)
+            if args.action == "investigate_further":
+                result["handoff"] = create_handoff(with_store, args.presentation_file, args.item,
+                                                    args.reason, archive=args.archive)
             print(json.dumps(result, indent=2, ensure_ascii=False))
         elif args.command == "handoff":
             outcome = create_handoff(with_store, args.presentation_file, args.item,
