@@ -7,7 +7,7 @@ def manifest_connector(path: str | Path, provider: str):
     """Read candidate records prepared offline; no source is presumed verified."""
     path = Path(path)
     def search(query: str, limit: int) -> list[DiscoveryHit]:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
         if not isinstance(data, list) or len(data) > 200:
             raise ValueError("Manifest must contain no more than 200 objects")
         rows = []
