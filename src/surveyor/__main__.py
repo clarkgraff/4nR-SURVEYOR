@@ -5,6 +5,8 @@ from pathlib import Path
 from .core import JobStore, Mission, SUITES, Surveyor
 from .orchestrator import ResearchRequest, run_research
 from .pipeline import PipelineRequest, run_pipeline
+from .discovery import DiscoveryRequest, discover, save_report, SOURCES
+from .discovery_connectors import manifest_connector
 
 
 def main():
@@ -35,6 +37,14 @@ def main():
     pipeline.add_argument("--reviewer", choices=SUITES)
     pipeline.add_argument("--vet", action="store_true", help="Run parent vetting against approved source passages")
     pipeline.add_argument("--allow-download", action="store_true")
+    discovery = sub.add_parser("discover", help="D6A offline source discovery")
+    discovery.add_argument("suite", choices=SUITES)
+    discovery.add_argument("query")
+    discovery.add_argument("--provider", required=True, choices=sorted({p for values in SOURCES.values() for p in values}))
+    discovery.add_argument("--manifest", required=True, help="Local JSON candidate manifest")
+    discovery.add_argument("--archive", default="surveyor-archive")
+    discovery.add_argument("--scope", default="")
+    discovery.add_argument("--limit", type=int, default=20)
     args = parser.parse_args()
     with_store = JobStore(Path(args.db))
     try:
@@ -56,6 +66,13 @@ def main():
                         tuple(args.source), frozenset(args.approve_host), args.reviewer, args.vet)
             request.validate()
             report = run_pipeline(with_store, request, Path(args.archive))
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+        elif args.command == "discover":
+            request = DiscoveryRequest(args.suite, args.query, (args.provider,),
+                                       args.scope, args.limit)
+            report = discover(request, {args.provider: manifest_connector(args.manifest, args.provider)})
+            destination = save_report(report, args.archive)
+            report["archive_path"] = str(destination)
             print(json.dumps(report, indent=2, ensure_ascii=False))
         elif args.command == "run":
             print(json.dumps(Surveyor(with_store).dispatch(args.job_id), indent=2))
