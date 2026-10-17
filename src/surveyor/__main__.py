@@ -10,6 +10,7 @@ from .discovery_connectors import manifest_connector
 from .youtube_connector import youtube_connector
 from .presentation import present, save_presentation, record_decision, ACTIONS
 from .handoff import create_handoff, execute_handoff
+from .knowledge import KnowledgeCatalogue
 
 
 def main():
@@ -69,6 +70,17 @@ def main():
     followup.add_argument("job_id", type=int)
     followup.add_argument("--reviewer", choices=SUITES)
     followup.add_argument("--archive", default="surveyor-archive")
+    knowledge = sub.add_parser("knowledge-add", help="D7 curate approved discovery candidate")
+    knowledge.add_argument("presentation_file")
+    knowledge.add_argument("item", type=int)
+    knowledge.add_argument("--archive", default="surveyor-archive")
+    knowledge.add_argument("--knowledge-db", default="surveyor-knowledge.sqlite3")
+    query_knowledge = sub.add_parser("knowledge-search")
+    query_knowledge.add_argument("query")
+    query_knowledge.add_argument("--knowledge-db", default="surveyor-knowledge.sqlite3")
+    gui = sub.add_parser("gui", help="D8 local review GUI")
+    gui.add_argument("--archive", default="surveyor-archive")
+    gui.add_argument("--knowledge-db", default="surveyor-knowledge.sqlite3")
     args = parser.parse_args()
     with_store = JobStore(Path(args.db))
     try:
@@ -131,6 +143,22 @@ def main():
             outcome = execute_handoff(with_store, args.job_id,
                                       reviewer=args.reviewer, archive=args.archive)
             print(json.dumps(outcome, indent=2, ensure_ascii=False))
+        elif args.command == "knowledge-add":
+            cat = KnowledgeCatalogue(args.knowledge_db)
+            try:
+                print(json.dumps(cat.add(args.presentation_file, args.item, args.archive),
+                                 indent=2, ensure_ascii=False))
+            finally:
+                cat.close()
+        elif args.command == "knowledge-search":
+            cat = KnowledgeCatalogue(args.knowledge_db)
+            try:
+                print(json.dumps(cat.search(args.query), indent=2, ensure_ascii=False))
+            finally:
+                cat.close()
+        elif args.command == "gui":
+            from .gui import launch_gui
+            launch_gui(args.archive, args.knowledge_db)
         elif args.command == "run":
             print(json.dumps(Surveyor(with_store).dispatch(args.job_id), indent=2))
         elif args.command == "cancel":
