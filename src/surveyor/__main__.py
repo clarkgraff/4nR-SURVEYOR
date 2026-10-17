@@ -50,6 +50,7 @@ def main():
     discovery.add_argument("--limit", type=int, default=20)
     presentation = sub.add_parser("present")
     presentation.add_argument("discovery_file")
+    presentation.add_argument("--pipeline-result", help="Optional saved pipeline JSON results")
     presentation.add_argument("--archive", default="surveyor-archive")
     decision = sub.add_parser("decide")
     decision.add_argument("presentation_file")
@@ -98,7 +99,10 @@ def main():
             report["archive_path"] = str(destination)
             print(json.dumps(report, indent=2, ensure_ascii=False))
         elif args.command == "present":
-            report = present(args.discovery_file)
+            research = None
+            if args.pipeline_result:
+                research = json.loads(Path(args.pipeline_result).read_text(encoding="utf-8-sig"))
+            report = present(args.discovery_file, pipeline_result=research)
             destination = save_presentation(report, args.archive)
             report["presentation_path"] = str(destination)
             print(json.dumps(report, indent=2, ensure_ascii=False))
