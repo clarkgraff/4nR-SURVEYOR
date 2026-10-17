@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from .core import JobStore, Mission, SUITES, Surveyor
 from .orchestrator import ResearchRequest, run_research
+from .pipeline import PipelineRequest, run_pipeline
 
 
 def main():
@@ -24,6 +25,15 @@ def main():
     multi.add_argument("question")
     multi.add_argument("--suites", nargs="+", required=True, choices=SUITES)
     multi.add_argument("--scope", default="")
+    pipeline = sub.add_parser("pipeline", help="D4 explicit research pipeline")
+    pipeline.add_argument("suite", choices=SUITES)
+    pipeline.add_argument("question")
+    pipeline.add_argument("--scope", default="")
+    pipeline.add_argument("--archive", default="surveyor-archive")
+    pipeline.add_argument("--source", action="append", default=[])
+    pipeline.add_argument("--approve-host", action="append", default=[])
+    pipeline.add_argument("--reviewer", choices=SUITES)
+    pipeline.add_argument("--allow-download", action="store_true")
     args = parser.parse_args()
     with_store = JobStore(Path(args.db))
     try:
@@ -36,6 +46,16 @@ def main():
         elif args.command == "research":
             report = run_research(with_store, ResearchRequest(args.question, tuple(args.suites), args.scope))
             print(json.dumps(report, indent=2))
+        elif args.command == "pipeline":
+            if args.source and not args.allow_download:
+                parser.error("--source requires --allow-download")
+            if args.allow_download and not args.source:
+                parser.error("--allow-download requires --source")
+            request = PipelineRequest(args.suite, args.question, args.scope,
+                        tuple(args.source), frozenset(args.approve_host), args.reviewer)
+            request.validate()
+            report = run_pipeline(with_store, request, Path(args.archive))
+            print(json.dumps(report, indent=2, ensure_ascii=False))
         elif args.command == "run":
             print(json.dumps(Surveyor(with_store).dispatch(args.job_id), indent=2))
         elif args.command == "cancel":
