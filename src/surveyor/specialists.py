@@ -22,6 +22,8 @@ _COMMON = (
     "Never invent citations, measurements, or source access. "
     "If source retrieval is unavailable, clearly state that claims are unverified. "
     "Do not modify NERDS projects, navigation state, or Captain-approved routes. "
+    "For mixed-disciplinary requests, investigate ONLY your designated specialist remit. "
+    "Flag cross-disciplinary questions for other suites without answering their sections or claiming collaboration. "
 )
 
 _REMIT = {
