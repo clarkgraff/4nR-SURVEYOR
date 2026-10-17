@@ -7,6 +7,7 @@ from .orchestrator import ResearchRequest, run_research
 from .pipeline import PipelineRequest, run_pipeline
 from .discovery import DiscoveryRequest, discover, save_report, SOURCES
 from .discovery_connectors import manifest_connector
+from .youtube_connector import youtube_connector
 
 
 def main():
@@ -41,7 +42,8 @@ def main():
     discovery.add_argument("suite", choices=SUITES)
     discovery.add_argument("query")
     discovery.add_argument("--provider", required=True, choices=sorted({p for values in SOURCES.values() for p in values}))
-    discovery.add_argument("--manifest", required=True, help="Local JSON candidate manifest")
+    discovery.add_argument("--manifest", help="Local JSON candidate manifest")
+    discovery.add_argument("--live", action="store_true", help="Use official YouTube API (requires SURVEYOR_YOUTUBE_API_KEY)")
     discovery.add_argument("--archive", default="surveyor-archive")
     discovery.add_argument("--scope", default="")
     discovery.add_argument("--limit", type=int, default=20)
@@ -70,7 +72,17 @@ def main():
         elif args.command == "discover":
             request = DiscoveryRequest(args.suite, args.query, (args.provider,),
                                        args.scope, args.limit)
-            report = discover(request, {args.provider: manifest_connector(args.manifest, args.provider)})
+            if args.live and args.manifest:
+                parser.error("Choose --live or --manifest, not both")
+            if not args.live and not args.manifest:
+                parser.error("Supply --manifest or --live")
+            if args.live:
+                if args.provider != "youtube":
+                    parser.error("Live connector currently supported only for youtube")
+                connector = youtube_connector()
+            else:
+                connector = manifest_connector(args.manifest, args.provider)
+            report = discover(request, {args.provider: connector})
             destination = save_report(report, args.archive)
             report["archive_path"] = str(destination)
             print(json.dumps(report, indent=2, ensure_ascii=False))
