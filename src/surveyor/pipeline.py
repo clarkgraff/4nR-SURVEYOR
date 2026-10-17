@@ -13,6 +13,7 @@ from .research_index import index_acquisition, candidate_passages
 from .claim_review import parse_claim_drafts, cross_agent_review_packet
 from .core import JobStore, Mission, lemonade_chat
 from .specialists import system_prompt, SPECIALISTS
+from .vetting import vet_claim, VettingPolicy, AuditLog
 
 @dataclass(frozen=True)
 class PipelineRequest:
@@ -22,6 +23,7 @@ class PipelineRequest:
     source_urls: tuple[str, ...] = ()
     approved_hosts: frozenset[str] = frozenset()
     reviewer_suite: str | None = None
+    vetting_enabled: bool = False
 
     def validate(self):
         if self.suite not in SPECIALISTS or not self.question.strip():
@@ -30,6 +32,8 @@ class PipelineRequest:
             raise ValueError("Maximum eight distinct approved source URLs")
         if self.source_urls and not self.approved_hosts:
             raise ValueError("Explicitly approved hosts required")
+        if self.vetting_enabled and self.reviewer_suite is None:
+            raise ValueError('Vetting requires a distinct reviewer suite')
         if self.reviewer_suite is not None and (
             self.reviewer_suite not in SPECIALISTS or self.reviewer_suite == self.suite
         ):
@@ -94,6 +98,23 @@ def run_pipeline(store: JobStore, request: PipelineRequest, archive: str | Path,
                 entry["peer_review"] = {"suite":request.reviewer_suite,
                     "assessment":assessment["assessment"],"rationale":assessment["rationale"],
                     "status":"model_proposal_only"}
+            if request.vetting_enabled:
+                def assess(packet):
+                    prompt = (json.dumps(packet, ensure_ascii=False)
+                              + '\\nReturn ONLY JSON {"assessment":"supported|contradicted|insufficient|disputed","rationale":"..."}. '
+                                "If supplied evidence is absent or insufficient, answer insufficient.")
+                    model_result = infer(request.reviewer_suite, prompt,
+                                         system_prompt(request.reviewer_suite, request.approved_scope))
+                    if not isinstance(model_result, dict) or not isinstance(model_result.get("response"), str):
+                        raise ValueError("Invalid vetting model response")
+                    return json.loads(model_result["response"])
+                # No autonomous browsing or unseen retrieval; source-backed review
+                # remains bounded to operator-approved passages.
+                entry["vetting"] = vet_claim(asdict(claim), candidates, assessor=assess,
+                                            policy=VettingPolicy(max_investigations=0))
+                AuditLog(Path(archive) / "vetting-audit.jsonl").append(
+                    {"event_type":"claim_vetting", "job_id":job_id,
+                     "claim":asdict(claim), "result":entry["vetting"]})
             result["claims"].append(entry)
         result["status"]="completed"
         store.transition(job_id,"running","completed",result=result)
