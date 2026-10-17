@@ -33,6 +33,7 @@ def main():
     pipeline.add_argument("--source", action="append", default=[])
     pipeline.add_argument("--approve-host", action="append", default=[])
     pipeline.add_argument("--reviewer", choices=SUITES)
+    pipeline.add_argument("--vet", action="store_true", help="Run parent vetting against approved source passages")
     pipeline.add_argument("--allow-download", action="store_true")
     args = parser.parse_args()
     with_store = JobStore(Path(args.db))
@@ -52,7 +53,7 @@ def main():
             if args.allow_download and not args.source:
                 parser.error("--allow-download requires --source")
             request = PipelineRequest(args.suite, args.question, args.scope,
-                        tuple(args.source), frozenset(args.approve_host), args.reviewer)
+                        tuple(args.source), frozenset(args.approve_host), args.reviewer, args.vet)
             request.validate()
             report = run_pipeline(with_store, request, Path(args.archive))
             print(json.dumps(report, indent=2, ensure_ascii=False))
