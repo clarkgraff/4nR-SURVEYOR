@@ -9,6 +9,7 @@ from .discovery import DiscoveryRequest, discover, save_report, SOURCES
 from .discovery_connectors import manifest_connector
 from .youtube_connector import youtube_connector
 from .presentation import present, save_presentation, record_decision, ACTIONS
+from .handoff import create_handoff, execute_handoff
 
 
 def main():
@@ -59,6 +60,15 @@ def main():
     decision.add_argument("--operator", required=True)
     decision.add_argument("--reason", required=True)
     decision.add_argument("--archive", default="surveyor-archive")
+    handoff = sub.add_parser("handoff", help="Create queued job from recorded investigation decision")
+    handoff.add_argument("presentation_file")
+    handoff.add_argument("item", type=int)
+    handoff.add_argument("--reason", required=True)
+    handoff.add_argument("--archive", default="surveyor-archive")
+    followup = sub.add_parser("run-handoff", help="Run queued follow-up without autonomous downloads")
+    followup.add_argument("job_id", type=int)
+    followup.add_argument("--reviewer", choices=SUITES)
+    followup.add_argument("--archive", default="surveyor-archive")
     args = parser.parse_args()
     with_store = JobStore(Path(args.db))
     try:
@@ -110,6 +120,14 @@ def main():
             result = record_decision(args.presentation_file, args.item, args.action,
                                      args.operator, args.reason, archive=args.archive)
             print(json.dumps(result, indent=2, ensure_ascii=False))
+        elif args.command == "handoff":
+            outcome = create_handoff(with_store, args.presentation_file, args.item,
+                                     args.reason, archive=args.archive)
+            print(json.dumps(outcome, indent=2, ensure_ascii=False))
+        elif args.command == "run-handoff":
+            outcome = execute_handoff(with_store, args.job_id,
+                                      reviewer=args.reviewer, archive=args.archive)
+            print(json.dumps(outcome, indent=2, ensure_ascii=False))
         elif args.command == "run":
             print(json.dumps(Surveyor(with_store).dispatch(args.job_id), indent=2))
         elif args.command == "cancel":
