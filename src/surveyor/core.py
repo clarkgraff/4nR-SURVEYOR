@@ -96,7 +96,7 @@ class JobStore:
 
 
 def lemonade_chat(question: str, suite: str, *, endpoint: str | None = None,
-                  model: str | None = None, timeout: float = 120) -> dict:
+                  model: str | None = None, timeout: float = 120,\n                  system_instructions: str | None = None) -> dict:
     """OpenAI-compatible adapter; verify endpoint/model on installed Lemonade release."""
     endpoint = (endpoint or os.environ.get("SURVEYOR_LEMONADE_URL", "http://127.0.0.1:13305/api/v1")).rstrip("/")
     model = model or os.environ.get("SURVEYOR_MODEL")
@@ -105,7 +105,7 @@ def lemonade_chat(question: str, suite: str, *, endpoint: str | None = None,
     payload = {
         "model": model,
         "messages": [
-            {"role": "system", "content": "You are SURVEYOR-" + suite + ". Work only within the supplied approved scope. Mark uncertain claims and provide source provenance. Do not issue navigational commands or alter NERDS state."},
+            {"role": "system", "content": system_instructions or ("You are SURVEYOR-" + suite + ". Work only within the supplied approved scope. Mark uncertain claims and provide source provenance. Do not issue navigational commands or alter NERDS state.")},
             {"role": "user", "content": question},
         ],
         "stream": False,
