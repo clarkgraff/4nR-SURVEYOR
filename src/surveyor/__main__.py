@@ -13,6 +13,8 @@ from .handoff import create_handoff, execute_handoff
 from .knowledge import KnowledgeCatalogue
 from .media import import_media, get_media, verify_media
 from .media_processing import probe_media, extract_audio
+from .transcription import transcribe_local
+from .language import subtitles
 
 
 def main():
@@ -95,6 +97,17 @@ def main():
     media_audio = sub.add_parser("media-audio", help="Extract audio using ffmpeg")
     media_audio.add_argument("sha256")
     media_audio.add_argument("--archive", default="surveyor-archive")
+    transcribe = sub.add_parser("transcribe", help="D8C offline transcription with installed local model")
+    transcribe.add_argument("sha256")
+    transcribe.add_argument("--model-path", required=True)
+    transcribe.add_argument("--device", default="cpu")
+    transcribe.add_argument("--compute-type", default="int8")
+    transcribe.add_argument("--language")
+    transcribe.add_argument("--archive", default="surveyor-archive")
+    subs = sub.add_parser("subtitles", help="Export timecoded transcript subtitles")
+    subs.add_argument("transcript")
+    subs.add_argument("--format", choices=("srt","vtt"), default="srt")
+    subs.add_argument("--output", required=True)
     args = parser.parse_args()
     with_store = JobStore(Path(args.db))
     try:
@@ -178,6 +191,16 @@ def main():
             print(json.dumps(probe_media(args.archive,args.sha256),indent=2,ensure_ascii=False))
         elif args.command == "media-audio":
             print(json.dumps(extract_audio(args.archive,args.sha256),indent=2,ensure_ascii=False))
+        elif args.command == "transcribe":
+            print(json.dumps(transcribe_local(args.archive,args.sha256,
+                  model_path=args.model_path,device=args.device,
+                  compute_type=args.compute_type,language=args.language),
+                  indent=2,ensure_ascii=False))
+        elif args.command == "subtitles":
+            source=json.loads(Path(args.transcript).read_text(encoding="utf-8-sig"))
+            output=Path(args.output)
+            output.write_text(subtitles(source,args.format),encoding="utf-8")
+            print(json.dumps({"path":str(output),"format":args.format}))
         elif args.command == "gui":
             from .gui import launch_gui
             launch_gui(args.archive, args.knowledge_db)
