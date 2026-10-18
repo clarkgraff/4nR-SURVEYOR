@@ -11,6 +11,8 @@ from .youtube_connector import youtube_connector
 from .presentation import present, save_presentation, record_decision, ACTIONS
 from .handoff import create_handoff, execute_handoff
 from .knowledge import KnowledgeCatalogue
+from .media import import_media, get_media, verify_media
+from .media_processing import probe_media, extract_audio
 
 
 def main():
@@ -81,6 +83,18 @@ def main():
     gui = sub.add_parser("gui", help="D8 local review GUI")
     gui.add_argument("--archive", default="surveyor-archive")
     gui.add_argument("--knowledge-db", default="surveyor-knowledge.sqlite3")
+    media_import = sub.add_parser("media-import", help="Import locally held authorised audio/video")
+    media_import.add_argument("file")
+    media_import.add_argument("--operator", required=True)
+    media_import.add_argument("--permission", required=True)
+    media_import.add_argument("--source-url")
+    media_import.add_argument("--archive", default="surveyor-archive")
+    media_probe = sub.add_parser("media-probe", help="Inspect archived media with ffprobe")
+    media_probe.add_argument("sha256")
+    media_probe.add_argument("--archive", default="surveyor-archive")
+    media_audio = sub.add_parser("media-audio", help="Extract audio using ffmpeg")
+    media_audio.add_argument("sha256")
+    media_audio.add_argument("--archive", default="surveyor-archive")
     args = parser.parse_args()
     with_store = JobStore(Path(args.db))
     try:
@@ -156,6 +170,14 @@ def main():
                 print(json.dumps(cat.search(args.query), indent=2, ensure_ascii=False))
             finally:
                 cat.close()
+        elif args.command == "media-import":
+            result = import_media(args.file, args.archive, operator=args.operator,
+                                  licence_basis=args.permission, source_url=args.source_url)
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        elif args.command == "media-probe":
+            print(json.dumps(probe_media(args.archive,args.sha256),indent=2,ensure_ascii=False))
+        elif args.command == "media-audio":
+            print(json.dumps(extract_audio(args.archive,args.sha256),indent=2,ensure_ascii=False))
         elif args.command == "gui":
             from .gui import launch_gui
             launch_gui(args.archive, args.knowledge_db)
