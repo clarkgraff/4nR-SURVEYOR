@@ -170,6 +170,74 @@ def launch_gui(archive="surveyor-archive", db="surveyor-knowledge.sqlite3"):
         except Exception as exc:
             messagebox.showerror("Import failed",str(exc))
     ttk.Button(left,text="Import Media",command=import_local_media).pack(fill="x",pady=4)
+    def edit_transcript():
+        selected=filedialog.askopenfilename(title="Select archived transcript",
+             initialdir=str(archive/"language"/"transcripts"),
+             filetypes=[("Transcript JSON","*.json")])
+        if not selected:return
+        try:
+            from .language import subtitles
+            from .transcript_review import corrected_transcript
+            document=json.loads(Path(selected).read_text(encoding="utf-8-sig"))
+            if document.get("schema") not in ("surveyor.transcript.v0","surveyor.transcript-revision.v0"):
+                raise ValueError("Selected file is not a SURVEYOR transcript")
+            popup=tk.Toplevel(root)
+            popup.title("SURVEYOR — Transcript Review")
+            popup.geometry("850x580")
+            ttk.Label(popup,text="Review individual segments; original machine transcript is immutable.",
+                      padding=6).pack(anchor="w")
+            container=ttk.Frame(popup,padding=8)
+            container.pack(fill="both",expand=True)
+            listbox=tk.Listbox(container,exportselection=False,height=13)
+            listbox.pack(fill="both",expand=True)
+            segments=document["segments"]
+            for index,seg in enumerate(segments):
+                listbox.insert("end",f'{index+1}. [{seg["start"]:.2f}-{seg["end"]:.2f}] {seg["text"]}')
+            selected_index=tk.IntVar(value=-1)
+            replacement=tk.StringVar()
+            changes={}
+            def on_pick(event=None):
+                choice=listbox.curselection()
+                if not choice:return
+                index=choice[0]
+                selected_index.set(index)
+                replacement.set(changes.get(index,segments[index]["text"]))
+            listbox.bind("<<ListboxSelect>>",on_pick)
+            ttk.Entry(container,textvariable=replacement).pack(fill="x",pady=8)
+            reason_var=tk.StringVar()
+            ttk.Label(container,text="Correction reason (required)").pack(anchor="w")
+            ttk.Entry(container,textvariable=reason_var).pack(fill="x",pady=3)
+            def stage():
+                index=selected_index.get()
+                if index<0:return
+                value=replacement.get().strip()
+                if not value:
+                    messagebox.showerror("Invalid correction","Correction cannot be empty",parent=popup)
+                    return
+                changes[index]=value
+                seg=segments[index]
+                listbox.delete(index)
+                listbox.insert(index,f'{index+1}. [{seg["start"]:.2f}-{seg["end"]:.2f}] {value}')
+                listbox.selection_set(index)
+                status.set("WORKING — "+str(len(changes))+" transcript edits staged")
+            def save():
+                name=operator.get().strip()
+                why=reason_var.get().strip()
+                try:
+                    destination=corrected_transcript(selected,changes,operator=name,reason=why,archive=archive)
+                    status.set("COMPLETE — Transcript correction revision saved")
+                    messagebox.showinfo("Revision saved",str(destination),parent=popup)
+                    popup.destroy()
+                except Exception as exc:
+                    messagebox.showerror("Revision not saved",str(exc),parent=popup)
+            actions=ttk.Frame(container)
+            actions.pack(fill="x",pady=8)
+            ttk.Button(actions,text="Stage correction",command=stage).pack(side="left",padx=4)
+            ttk.Button(actions,text="Save revision",command=save).pack(side="left",padx=4)
+        except Exception as exc:
+            messagebox.showerror("Transcript unavailable",str(exc))
+    ttk.Button(left,text="Review Transcript",command=edit_transcript).pack(fill="x",pady=4)
+
     refresh()
     def close():
         catalogue.close()
