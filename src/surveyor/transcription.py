@@ -18,6 +18,9 @@ def transcribe_local(archive,media_hash,*,model_path,device="cpu",compute_type="
         from faster_whisper import WhisperModel
     except ImportError as exc:
         raise RuntimeError("Install optional faster-whisper dependency for transcription") from exc
+    import av
+    if int(av.__version__.split(".")[0]) >= 19:
+        raise RuntimeError("faster-whisper 1.2.1 is incompatible with PyAV 19; install a compatible PyAV release (python -m pip install \"av>=17,<19\") before transcription")
     derivative=extract_audio(archive,media_hash)
     model=WhisperModel(str(model_path),device=device,compute_type=compute_type,
                        local_files_only=True)
