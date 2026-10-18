@@ -4,6 +4,9 @@ Only local files, no remote listeners, email, shell execution or implicit web ac
 """
 from __future__ import annotations
 import json
+import html
+import shutil
+import webbrowser
 from pathlib import Path
 from .presentation import record_decision
 from .knowledge import KnowledgeCatalogue
@@ -18,6 +21,7 @@ def launch_gui(archive="surveyor-archive", db="surveyor-knowledge.sqlite3"):
     root=tk.Tk()
     root.title("4nR-SURVEYOR — Research Review")
     root.geometry("1060x720")
+    root.minsize(790, 550)
     archive=Path(archive)
     catalogue=KnowledgeCatalogue(db)
     docs=[]
@@ -38,8 +42,11 @@ def launch_gui(archive="surveyor-archive", db="surveyor-knowledge.sqlite3"):
     ttk.Label(right,text="Discovered sources").pack(anchor="w")
     entries=tk.Listbox(right,exportselection=False,height=10)
     entries.pack(fill="both",expand=True)
-    detail=tk.Text(right,height=16,wrap="word")
+    detail=tk.Text(right,height=10,wrap="word",font=("Segoe UI",10))
     detail.pack(fill="both",expand=True,pady=6)
+    show_raw=tk.BooleanVar(value=False)
+    status=tk.StringVar(value="READY — Local research archive")
+    engine = "FFmpeg ready" if shutil.which("ffmpeg") and shutil.which("ffprobe") else "FFmpeg/FFprobe unavailable"
     rationale=ttk.Entry(right)
     rationale.pack(fill="x",pady=4)
     rationale.insert(0,"Reason for disposition")
@@ -53,8 +60,17 @@ def launch_gui(archive="surveyor-archive", db="surveyor-knowledge.sqlite3"):
         if not doc or not selected:return
         hit=doc["sources"][selected[0]]
         detail.delete("1.0","end")
-        detail.insert("end",json.dumps(hit,indent=2,ensure_ascii=False)
-                      +"\n\nOriginal source can be opened using the browser after independent review.")
+        if show_raw.get():
+            content=json.dumps(hit,indent=2,ensure_ascii=False)
+        else:
+            content=("TITLE: "+html.unescape(hit.get("title",""))+"\n\n"
+                     +"CREATOR: "+html.unescape(hit.get("creator",""))+"\n"
+                     +"PLATFORM: "+hit.get("provider","")+"\n"
+                     +"STATUS: "+hit.get("status","unknown")+"\n\n"
+                     +"DESCRIPTION:\n"+html.unescape(hit.get("description",""))+"\n\n"
+                     +"ORIGINAL SOURCE:\n"+hit.get("url",""))
+        detail.insert("end",content)
+        status.set("READY — Source "+str(hit.get("index","?"))+" selected")
     entries.bind("<<ListboxSelect>>",show_entry)
 
     def show_presentation(_=None):
@@ -66,8 +82,9 @@ def launch_gui(archive="surveyor-archive", db="surveyor-knowledge.sqlite3"):
         current.update(path=path,report=doc)
         entries.delete(0,"end")
         for hit in doc["sources"]:
-            entries.insert("end",str(hit["index"])+": "+hit["title"])
+            entries.insert("end",str(hit["index"])+": "+html.unescape(hit["title"]))
         detail.delete("1.0","end")
+        status.set("READY — "+str(len(doc["sources"]))+" sources loaded")
         detail.insert("end","Choose a discovery item. Claims: "+str(len(doc.get("claims",[])))+
                       "\nResearch verification: "+doc.get("research_verification","unknown"))
     presentations.bind("<<ListboxSelect>>",show_presentation)
@@ -108,16 +125,31 @@ def launch_gui(archive="surveyor-archive", db="surveyor-knowledge.sqlite3"):
                 answer["queued_handoff_job"]=handoff["job_id"]
             if action=="approve":
                 answer["catalogue"]=catalogue.add(current["path"],selected[0]+1,archive)["id"]
+            status.set("COMPLETE — Decision "+action+" recorded")
             messagebox.showinfo("Decision recorded",json.dumps(answer,indent=2))
         except Exception as exc:
             messagebox.showerror("Operation failed",str(exc))
 
-    controls=ttk.Frame(right)
-    controls.pack(fill="x",pady=5)
+    controls=ttk.Frame(layout)
+    controls.pack(side="bottom",fill="x",pady=5)
     for label,action in [("Approve candidate","approve"),("Investigate further","investigate_further"),
                          ("Flag / correct","flag_correct"),("Save for later","save_for_later")]:
         ttk.Button(controls,text=label,command=lambda a=action:decide(a)).pack(side="left",padx=3)
+    bottom=ttk.Frame(layout)
+    bottom.pack(side="bottom",fill="x")
+    ttk.Label(bottom,textvariable=status).pack(side="left")
+    ttk.Label(bottom,text=engine).pack(side="right")
     ttk.Button(left,text="Refresh",command=refresh).pack(fill="x")
+    def open_source():
+        selected=entries.curselection()
+        if selected and current["report"]:
+            url=current["report"]["sources"][selected[0]].get("url","")
+            if url.startswith(("https://","http://")):
+                webbrowser.open(url)
+                status.set("COMPLETE — Opened source in browser")
+    ttk.Button(controls,text="Open Source",command=open_source).pack(side="left",padx=3)
+    ttk.Checkbutton(controls,text="Debug JSON",variable=show_raw,
+                    command=show_entry).pack(side="right",padx=3)
 
     def import_local_media():
         selected=filedialog.askopenfilename(title="Import authorised audio/video",
