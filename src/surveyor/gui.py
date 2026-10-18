@@ -11,7 +11,7 @@ from .knowledge import KnowledgeCatalogue
 def launch_gui(archive="surveyor-archive", db="surveyor-knowledge.sqlite3"):
     try:
         import tkinter as tk
-        from tkinter import ttk, messagebox
+        from tkinter import ttk, messagebox, filedialog
     except ImportError as exc:
         raise RuntimeError("Tkinter is required for the local SURVEYOR interface") from exc
 
@@ -118,6 +118,26 @@ def launch_gui(archive="surveyor-archive", db="surveyor-knowledge.sqlite3"):
                          ("Flag / correct","flag_correct"),("Save for later","save_for_later")]:
         ttk.Button(controls,text=label,command=lambda a=action:decide(a)).pack(side="left",padx=3)
     ttk.Button(left,text="Refresh",command=refresh).pack(fill="x")
+
+    def import_local_media():
+        selected=filedialog.askopenfilename(title="Import authorised audio/video",
+              filetypes=[("Audio/video","*.wav *.mp3 *.flac *.m4a *.aac *.ogg *.opus *.aif *.aiff *.mp4 *.mov *.mkv *.webm"),("All files","*.*")])
+        if not selected:
+            return
+        name=operator.get().strip()
+        permission=rationale.get().strip()
+        if not name or not permission or permission=="Reason for disposition":
+            messagebox.showerror("Permission required",
+                "Enter your operator name and the media permission/licence basis in the rationale field.")
+            return
+        try:
+            from .media import import_media
+            event=import_media(selected, archive,operator=name,licence_basis=permission)
+            messagebox.showinfo("Media archived","SHA-256: "+event["sha256_hex"]+
+                                "\\nOriginal recording preserved; no evidence verified.")
+        except Exception as exc:
+            messagebox.showerror("Import failed",str(exc))
+    ttk.Button(left,text="Import Media",command=import_local_media).pack(fill="x",pady=4)
     refresh()
     def close():
         catalogue.close()
